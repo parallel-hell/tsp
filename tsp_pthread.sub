@@ -1,0 +1,29 @@
+#!/bin/bash
+#SBATCH -A CS4380_CS5351 # account name
+#SBATCH -J p3_tsp        # job name
+#SBATCH -o p3_tsp.%j     # name of the output and error file
+#SBATCH -N 1             # total number of nodes requested
+#SBATCH -n 1             # total number of tasks requested
+#SBATCH -p normal        # queue name
+#SBATCH -t 00:02:00      # expected maximum runtime (hh:mm:ss)
+
+./tsp_pthread /home1/00976/burtsche/Parallel/d1291.btsp 1
+./tsp_pthread /home1/00976/burtsche/Parallel/d1291.btsp 2
+./tsp_pthread /home1/00976/burtsche/Parallel/d1291.btsp 4
+./tsp_pthread /home1/00976/burtsche/Parallel/d1291.btsp 8
+./tsp_pthread /home1/00976/burtsche/Parallel/d1291.btsp 16
+
+./tsp_pthread /home1/00976/burtsche/Parallel/nrw1379.btsp 1
+./tsp_pthread /home1/00976/burtsche/Parallel/nrw1379.btsp 2
+./tsp_pthread /home1/00976/burtsche/Parallel/nrw1379.btsp 4
+./tsp_pthread /home1/00976/burtsche/Parallel/nrw1379.btsp 8
+./tsp_pthread /home1/00976/burtsche/Parallel/nrw1379.btsp 16
+
+./tsp_pthread /home1/00976/burtsche/Parallel/fl1400.btsp 1
+./tsp_pthread /home1/00976/burtsche/Parallel/fl1400.btsp 2
+./tsp_pthread /home1/00976/burtsche/Parallel/fl1400.btsp 4
+./tsp_pthread /home1/00976/burtsche/Parallel/fl1400.btsp 8
+./tsp_pthread /home1/00976/burtsche/Parallel/fl1400.btsp 16
+
+date
+
