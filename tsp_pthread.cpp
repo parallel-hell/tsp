@@ -1,4 +1,6 @@
 /*
+Modified by Adriana Rios and Kasie Kelldorf
+
 TSP code for CS 4380 / CS 5351
 
 Copyright (c) 2016, Texas State University. All rights reserved.
@@ -33,18 +35,20 @@ Author: Martin Burtscher
 // # 8 may have missed something
 static int cities, posx, posy, climbs, thread_count;
 static int TwoOpt(int& climbs);
+static const int width;
 
 #define dist(a, b) (int)(sqrtf((px[a] - px[b]) * (px[a] - px[b]) + (py[a] - py[b]) * (py[a] - py[b])) + 0.5f)
 
 int TwoOpt(int& climbs)   // #9
 {
+  // #18
   long thread;
   pthread_t* thread_handles;
-  thread_handles = static_cast<pthread_t*>(malloc(thread_count * sizeof(phtread_t)));
+  thread_handles =
+          static_cast<pthread_t*>(malloc(thread_count * sizeof(phtread_t)));
+  pthread_mutex_t* mutex_p;
+  pthread_mutex_t_init(&mutex_p, NULL);
 
-  // #11 creat threads-1
-  //for (thread = 0; thread < thread_count - 1; thread++)
-    //pthread_create();
 
   // link end to beginning
   px[cities] = px[0];
@@ -56,17 +60,13 @@ int TwoOpt(int& climbs)   // #9
   do {
     iter++;
 
-    // determine best 2-opt move
-    minchange = 0;
-    for (int i = 0; i < cities - 2; i++) {
-      for (int j = i + 2; j < cities; j++) {
-        long change = dist(i, j) + dist(i + 1, j + 1) - dist(i, i + 1) - dist(j, j + 1);
-        change = (change << 32) + (i << 16) + j;
-        if (minchange > change) {
-          minchange = change;
-        }
-      }
-    }
+    // #11 create threads-1
+    for (thread = 0; thread < thread_count - 1; thread++)
+    pthread_create(&thread_handles[thread], NULL, workerThreads, (int*) thread);
+
+    // #11 master must call same function
+    workerThreads((int*) (thread_count-1));
+
 
     // apply move if it shortens the tour
     if (minchange < 0) {
@@ -89,6 +89,15 @@ int TwoOpt(int& climbs)   // #9
   for (int i = 0; i < cities; i++) {
     len += dist(i, i + 1);
   }
+
+  // join threads
+  for (thread = 0; thread < thread_count; thread++)
+    pthread_join(thread_handles[thread], NULL);
+
+  // #18
+  pthread_mutex_destroy(&mutex_p);
+  pthread_exit(NULL);   //unsure
+
   return len;
 }
 
@@ -130,7 +139,7 @@ int main(int argc, char *argv[])
   printf("tour length = %d\n", len);
 
   // scale and draw final tour
-  const int width = 1024;
+  width = 1024;
   unsigned char pic[width][width];
   memset(pic, 0, width * width * sizeof(unsigned char));
   float minx = posx[0], maxx = posx[0];
@@ -161,3 +170,23 @@ int main(int argc, char *argv[])
   return 0;
 }
 
+void* workerThreads(int* rank) {
+  long my_rank = (long) rank;
+
+
+// determine best 2-opt move
+  minchange = 0;
+  // #15 cyclic
+  for (int i = rank; i < cities - 2; i+=thread_count) {
+    for (int j = i + 2; j < cities; j++) {
+      long change = dist(i, j) + dist(i + 1, j + 1) - dist(i, i + 1) - dist(j, j + 1);
+      change = (change << 32) + (i << 16) + j;
+      if (minchange > change) {
+        minchange = change;
+      }
+    }
+  }
+
+
+  return NULL;
+}
