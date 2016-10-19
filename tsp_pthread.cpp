@@ -32,15 +32,19 @@ Author: Martin Burtscher
 #include <pthread.h>  // #3
 #include "cs43805351.h"
 
-// # 8 may have missed something
-static int climbs, thread_count, cities, minchange, rank;
+// #8
+static int cities, climbs;
+static long minchange, thread_count;
+static float *px, *py;
+static void* workerThreads(void* rank);
 
-static int TwoOpt(int& climbs);
-static void* workerThreads(int rank);
+//static pthread_t* thread_handles;
+//static pthread_mutex_t* mutex_p;
+
 
 #define dist(a, b) (int)(sqrtf((px[a] - px[b]) * (px[a] - px[b]) + (py[a] - py[b]) * (py[a] - py[b])) + 0.5f)
 
-int TwoOpt(int& climbs)   // #9
+static int TwoOpt(int& climbs)   // #9
 {
   // #18
   long thread;
@@ -48,26 +52,30 @@ int TwoOpt(int& climbs)   // #9
   thread_handles =
           static_cast<pthread_t*>(malloc(thread_count * sizeof(pthread_t)));
   pthread_mutex_t* mutex_p;
-  pthread_mutex_init(&mutex_p, NULL);
-
+  //pthread_mutex_init(&mutex_p, NULL);
 
   // link end to beginning
   px[cities] = px[0];
   py[cities] = py[0];
 
   // repeat until no improvement
-  long minchange;
   int iter = 0;
   do {
     iter++;
 
     // #11 master must call same function
-    workerThreads((int) (thread_count-1));
+    workerThreads((void*) (thread_count-1));
 
     // #11 create threads-1
-    for (thread = 0; thread < thread_count - 1; thread++)
-    pthread_create(&thread_handles[thread], NULL, workerThreads, (void*) thread);
+    for (thread = 0; thread < thread_count - 1; thread++) {
+      //pthread_mutex_lock(&mutex_p);
+      pthread_create(&thread_handles[thread], NULL, workerThreads, (void*) thread);
+      //pthread_mutex_unlock(&mutex_p);
+    }
 
+    // join threads
+    for (thread = 0; thread < thread_count; thread++)
+      pthread_join(thread_handles[thread], NULL);
 
     // apply move if it shortens the tour
     if (minchange < 0) {
@@ -91,13 +99,9 @@ int TwoOpt(int& climbs)   // #9
     len += dist(i, i + 1);
   }
 
-  // join threads
-  for (thread = 0; thread < thread_count; thread++)
-    pthread_join(thread_handles[thread], NULL);
-
   // #18
-  pthread_mutex_destroy(&mutex_p);
-  pthread_exit(NULL);
+  //pthread_mutex_destroy(&mutex_p);
+  //pthread_exit(NULL);
 
   return len;
 }
@@ -119,7 +123,7 @@ int main(int argc, char *argv[])
   cnt = fread(posx, sizeof(float), cities, f);  if (cnt != cities) {fprintf(stderr, "error: failed to read posx\n"); exit(-1);}
   cnt = fread(posy, sizeof(float), cities, f);  if (cnt != cities) {fprintf(stderr, "error: failed to read posy\n"); exit(-1);}
   fclose(f);
-  printf("configuration: %d cities from %s on %d threads\n", cities, argv[1], thread_count);  // #7 ?
+  printf("configuration: %d cities from %s on %ld threads\n", cities, argv[1], thread_count);  // #7 ?
 
   // start time
   struct timeval start, end;
@@ -171,17 +175,14 @@ int main(int argc, char *argv[])
   return 0;
 }
 
-void* workerThreads(int rank) {
+static void* workerThreads(void* rank) {
   long my_rank = (long) rank;
-
 
   // determine best 2-opt move
   minchange = 0;
 
-  pthread_mutex_lock(&mutex_p);
-
   // #15 cyclic
-  for (int i = rank; i < cities - 2; i+=thread_count) {
+  for (int i = my_rank; i < cities - 2; i+=thread_count) {
     for (int j = i + 2; j < cities; j++) {
       long change = dist(i, j) + dist(i + 1, j + 1) - dist(i, i + 1) - dist(j, j + 1);
       change = (change << 32) + (i << 16) + j;
@@ -190,8 +191,6 @@ void* workerThreads(int rank) {
       }
     }
   }
-
-  pthread_mutex_unlock(&mutex_p);
 
   return NULL;
 }
