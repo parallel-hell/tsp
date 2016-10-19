@@ -33,9 +33,10 @@ Author: Martin Burtscher
 #include "cs43805351.h"
 
 // # 8 may have missed something
-static int cities, posx, posy, climbs, thread_count;
+static int climbs, thread_count, cities, minchange, rank;
+
 static int TwoOpt(int& climbs);
-static const int width;
+static void* workerThreads(int rank);
 
 #define dist(a, b) (int)(sqrtf((px[a] - px[b]) * (px[a] - px[b]) + (py[a] - py[b]) * (py[a] - py[b])) + 0.5f)
 
@@ -45,9 +46,9 @@ int TwoOpt(int& climbs)   // #9
   long thread;
   pthread_t* thread_handles;
   thread_handles =
-          static_cast<pthread_t*>(malloc(thread_count * sizeof(phtread_t)));
+          static_cast<pthread_t*>(malloc(thread_count * sizeof(pthread_t)));
   pthread_mutex_t* mutex_p;
-  pthread_mutex_t_init(&mutex_p, NULL);
+  pthread_mutex_init(&mutex_p, NULL);
 
 
   // link end to beginning
@@ -60,12 +61,12 @@ int TwoOpt(int& climbs)   // #9
   do {
     iter++;
 
+    // #11 master must call same function
+    workerThreads((int) (thread_count-1));
+
     // #11 create threads-1
     for (thread = 0; thread < thread_count - 1; thread++)
-    pthread_create(&thread_handles[thread], NULL, workerThreads, (int*) thread);
-
-    // #11 master must call same function
-    workerThreads((int*) (thread_count-1));
+    pthread_create(&thread_handles[thread], NULL, workerThreads, (void*) thread);
 
 
     // apply move if it shortens the tour
@@ -96,7 +97,7 @@ int TwoOpt(int& climbs)   // #9
 
   // #18
   pthread_mutex_destroy(&mutex_p);
-  pthread_exit(NULL);   //unsure
+  pthread_exit(NULL);
 
   return len;
 }
@@ -139,7 +140,7 @@ int main(int argc, char *argv[])
   printf("tour length = %d\n", len);
 
   // scale and draw final tour
-  width = 1024;
+  const int width = 1024;
   unsigned char pic[width][width];
   memset(pic, 0, width * width * sizeof(unsigned char));
   float minx = posx[0], maxx = posx[0];
@@ -170,12 +171,15 @@ int main(int argc, char *argv[])
   return 0;
 }
 
-void* workerThreads(int* rank) {
+void* workerThreads(int rank) {
   long my_rank = (long) rank;
 
 
-// determine best 2-opt move
+  // determine best 2-opt move
   minchange = 0;
+
+  pthread_mutex_lock(&mutex_p);
+
   // #15 cyclic
   for (int i = rank; i < cities - 2; i+=thread_count) {
     for (int j = i + 2; j < cities; j++) {
@@ -187,6 +191,7 @@ void* workerThreads(int* rank) {
     }
   }
 
+  pthread_mutex_unlock(&mutex_p);
 
   return NULL;
 }
