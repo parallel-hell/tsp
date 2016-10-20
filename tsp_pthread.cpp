@@ -48,10 +48,8 @@ static int TwoOpt(int& climbs)   // #9
 {
   // #18
   long thread;
-  pthread_t* thread_handles;
   thread_handles =
           static_cast<pthread_t*>(malloc(thread_count * sizeof(pthread_t)));
-  //pthread_mutex_t* mutex_p;
   pthread_mutex_init(&mutex_p, NULL);
 
   // link end to beginning
@@ -177,8 +175,6 @@ int main(int argc, char *argv[])
 }
 
 static void* workerThreads(void* rank) {
-  pthread_mutex_lock(&mutex_p);
-
   long my_rank = (long) rank;
 
   // determine best 2-opt move
@@ -187,14 +183,17 @@ static void* workerThreads(void* rank) {
   // #15 cyclic
   for (int i = my_rank; i < cities - 2; i+=thread_count) {
     for (int j = i + 2; j < cities; j++) {
-      long my_minchange = dist(i, j) + dist(i + 1, j + 1) - dist(i, i + 1) - dist(j, j + 1);
-      my_minchange = (my_minchange << 32) + (i << 16) + j;
-      if (my_minchange < minchange) {
-        minchange = my_minchange;
+      long change = dist(i, j) + dist(i + 1, j + 1) - dist(i, i + 1) - dist(j, j + 1);
+      change = (change << 32) + (i << 16) + j;
+      if (my_minchange > change) {
+        my_minchange = change;
       }
     }
   }
 
+  pthread_mutex_lock(&mutex_p);
+  if (minchange > my_minchange)
+    minchange = my_minchange;
   pthread_mutex_unlock(&mutex_p);
   return NULL;
 }
