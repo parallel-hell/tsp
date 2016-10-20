@@ -34,12 +34,12 @@ Author: Martin Burtscher
 
 // #8
 static int cities, climbs;
-static long minchange, thread_count;
+static long minchange, thread_count, my_minchange;
 static float *px, *py;
 static void* workerThreads(void* rank);
 
-//static pthread_t* thread_handles;
-//static pthread_mutex_t* mutex_p;
+static pthread_t* thread_handles;
+static pthread_mutex_t mutex_p = PTHREAD_MUTEX_INITIALIZER;
 
 
 #define dist(a, b) (int)(sqrtf((px[a] - px[b]) * (px[a] - px[b]) + (py[a] - py[b]) * (py[a] - py[b])) + 0.5f)
@@ -51,8 +51,8 @@ static int TwoOpt(int& climbs)   // #9
   pthread_t* thread_handles;
   thread_handles =
           static_cast<pthread_t*>(malloc(thread_count * sizeof(pthread_t)));
-  pthread_mutex_t* mutex_p;
-  //pthread_mutex_init(&mutex_p, NULL);
+  //pthread_mutex_t* mutex_p;
+  pthread_mutex_init(&mutex_p, NULL);
 
   // link end to beginning
   px[cities] = px[0];
@@ -68,9 +68,7 @@ static int TwoOpt(int& climbs)   // #9
 
     // #11 create threads-1
     for (thread = 0; thread < thread_count - 1; thread++) {
-      //pthread_mutex_lock(&mutex_p);
       pthread_create(&thread_handles[thread], NULL, workerThreads, (void*) thread);
-      //pthread_mutex_unlock(&mutex_p);
     }
 
     // join threads
@@ -100,8 +98,8 @@ static int TwoOpt(int& climbs)   // #9
   }
 
   // #18
-  //pthread_mutex_destroy(&mutex_p);
-  //pthread_exit(NULL);
+  pthread_mutex_destroy(&mutex_p);
+  pthread_exit(NULL);
 
   return len;
 }
@@ -143,6 +141,9 @@ int main(int argc, char *argv[])
   // output result
   printf("tour length = %d\n", len);
 
+  px = posx;
+  py = posy;
+
   // scale and draw final tour
   const int width = 1024;
   unsigned char pic[width][width];
@@ -176,21 +177,24 @@ int main(int argc, char *argv[])
 }
 
 static void* workerThreads(void* rank) {
+  pthread_mutex_lock(&mutex_p);
+
   long my_rank = (long) rank;
 
   // determine best 2-opt move
-  minchange = 0;
+  my_minchange = 0;
 
   // #15 cyclic
   for (int i = my_rank; i < cities - 2; i+=thread_count) {
     for (int j = i + 2; j < cities; j++) {
-      long change = dist(i, j) + dist(i + 1, j + 1) - dist(i, i + 1) - dist(j, j + 1);
-      change = (change << 32) + (i << 16) + j;
-      if (minchange > change) {
-        minchange = change;
+      long my_minchange = dist(i, j) + dist(i + 1, j + 1) - dist(i, i + 1) - dist(j, j + 1);
+      my_minchange = (my_minchange << 32) + (i << 16) + j;
+      if (my_minchange < minchange) {
+        minchange = my_minchange;
       }
     }
   }
 
+  pthread_mutex_unlock(&mutex_p);
   return NULL;
 }
