@@ -1,6 +1,4 @@
 /*
-Modified by Adriana Rios and Kasie Kelldorf
-
 TSP code for CS 4380 / CS 5351
 
 Copyright (c) 2016, Texas State University. All rights reserved.
@@ -29,49 +27,33 @@ Author: Martin Burtscher
 #include <cstring>
 #include <cmath>
 #include <sys/time.h>
-#include <pthread.h>  // #3
 #include "cs43805351.h"
-
-// #8
-static int cities;//, climbs;
-static long minchange, thread_count;
-static float *px, *py;
-static void* workerThreads(void* rank);
-
-static pthread_mutex_t mutex_p = PTHREAD_MUTEX_INITIALIZER;
-
 
 #define dist(a, b) (int)(sqrtf((px[a] - px[b]) * (px[a] - px[b]) + (py[a] - py[b]) * (py[a] - py[b])) + 0.5f)
 
-static int TwoOpt(int& climbs)   // #9
+static int TwoOpt(int cities, float px[], float py[], int& climbs)
 {
-  // #18
-  long thread;
-  pthread_t* thread_handles =
-          static_cast<pthread_t*>(malloc(thread_count * sizeof(pthread_t)));
-  pthread_mutex_init(&mutex_p, NULL);
-
   // link end to beginning
   px[cities] = px[0];
   py[cities] = py[0];
 
   // repeat until no improvement
+  long minchange;
   int iter = 0;
   do {
     iter++;
+
+    // determine best 2-opt move
     minchange = 0;
-
-    // #11 create threads-1
-    for (thread = 0; thread < thread_count - 1; thread++) {
-      pthread_create(&thread_handles[thread], NULL, workerThreads, (void*) thread);
+    for (int i = 0; i < cities - 2; i++) {
+      for (int j = i + 2; j < cities; j++) {
+        long change = dist(i, j) + dist(i + 1, j + 1) - dist(i, i + 1) - dist(j, j + 1);
+        change = (change << 32) + (i << 16) + j;
+        if (minchange > change) {
+          minchange = change;
+        }
+      }
     }
-
-    // #11 master must call same function
-    workerThreads((void*) (thread_count-1));
-
-    // join threads
-    for (thread = 0; thread < thread_count-1; thread++)
-      pthread_join(thread_handles[thread], NULL);
 
     // apply move if it shortens the tour
     if (minchange < 0) {
@@ -86,7 +68,6 @@ static int TwoOpt(int& climbs)   // #9
         j--;
       }
     }
-
   } while (minchange < 0);
   climbs = iter;
 
@@ -95,37 +76,24 @@ static int TwoOpt(int& climbs)   // #9
   for (int i = 0; i < cities; i++) {
     len += dist(i, i + 1);
   }
-
-  // #18
-  free(thread_handles);
-  pthread_mutex_destroy(&mutex_p);
-  pthread_exit(NULL);
-
   return len;
 }
 
 int main(int argc, char *argv[])
 {
-  printf("TSP v1.4 [pthread]\n");  // #2
+  printf("TSP v1.4 [serial]\n");
 
   // read input
-  if (argc != 3) {fprintf(stderr, "usage: %s input_file num_threads\n", argv[0]); exit(-1);}
+  if (argc != 2) {fprintf(stderr, "usage: %s input_file\n", argv[0]); exit(-1);}
   FILE* f = fopen(argv[1], "rb");  if (f == NULL) {fprintf(stderr, "error: could not open file %s\n", argv[1]); exit(-1);}
-  thread_count = atoi(argv[2]);   // #5
- 
- // #6
-  if (thread_count < 1) {fprintf(stderr, "error: thread_count must be at least 1\n");}
+  int cities;
   int cnt = fread(&cities, sizeof(int), 1, f);  if (cnt != 1) {fprintf(stderr, "error: failed to read cities\n"); exit(-1);}
-
   if (cities < 1) {fprintf(stderr, "error: cities must be greater than zero\n"); exit(-1);}
   float posx[cities + 1], posy[cities + 1];  // need an extra element later
   cnt = fread(posx, sizeof(float), cities, f);  if (cnt != cities) {fprintf(stderr, "error: failed to read posx\n"); exit(-1);}
   cnt = fread(posy, sizeof(float), cities, f);  if (cnt != cities) {fprintf(stderr, "error: failed to read posy\n"); exit(-1);}
   fclose(f);
-  printf("configuration: %d cities from %s on %ld threads\n", cities, argv[1], thread_count);  // #7 ?
-
-  px = posx;
-  py = posy;
+  printf("configuration: %d cities from %s\n", cities, argv[1]);
 
   // start time
   struct timeval start, end;
@@ -133,7 +101,7 @@ int main(int argc, char *argv[])
 
   // find good tour
   int climbs;
-  int len = TwoOpt(climbs);
+  int len = TwoOpt(cities, posx, posy, climbs);
 
   // end time
   gettimeofday(&end, NULL);
@@ -177,28 +145,3 @@ int main(int argc, char *argv[])
   return 0;
 }
 
-static void* workerThreads(void* rank) {
-  long my_rank = (long) rank;
-
-  // determine best 2-opt move
-  long my_minchange = 0;
-
-  // #15 cyclic
-  for (int i = my_rank; i < cities - 2; i+=thread_count) {
-    for (int j = i + 2; j < cities; j++) {
-			long change = dist(i, j) + dist(i + 1, j + 1) - dist(i, i + 1) - dist(j, j + 1);
-      change = (change << 32) + (i << 16) + j;
-      if (my_minchange > change) {
-        my_minchange = change;
-      }
-    }
-  }
-
-  pthread_mutex_lock(&mutex_p);
-  if (minchange > my_minchange) {
-    minchange = my_minchange;
-  }
-  pthread_mutex_unlock(&mutex_p);
-
-  return NULL;
-}
