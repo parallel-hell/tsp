@@ -33,12 +33,11 @@ Author: Martin Burtscher
 #include "cs43805351.h"
 
 // #8
-static int cities, climbs;
-static long minchange, thread_count, my_minchange;
+static int cities;//, climbs;
+static long minchange, thread_count;
 static float *px, *py;
 static void* workerThreads(void* rank);
 
-static pthread_t* thread_handles;
 static pthread_mutex_t mutex_p = PTHREAD_MUTEX_INITIALIZER;
 
 
@@ -48,7 +47,7 @@ static int TwoOpt(int& climbs)   // #9
 {
   // #18
   long thread;
-  thread_handles =
+  pthread_t* thread_handles =
           static_cast<pthread_t*>(malloc(thread_count * sizeof(pthread_t)));
   pthread_mutex_init(&mutex_p, NULL);
 
@@ -56,22 +55,29 @@ static int TwoOpt(int& climbs)   // #9
   px[cities] = px[0];
   py[cities] = py[0];
 
+  printf("here of two?\n");
+
   // repeat until no improvement
   int iter = 0;
   do {
     iter++;
-
-    // #11 master must call same function
-    workerThreads((void*) (thread_count-1));
+    minchange = 0;
 
     // #11 create threads-1
     for (thread = 0; thread < thread_count - 1; thread++) {
       pthread_create(&thread_handles[thread], NULL, workerThreads, (void*) thread);
     }
 
+    printf("here before master call?\n");
+    // #11 master must call same function
+    workerThreads((void*) (thread_count-1));
+
+    printf("make it through that?\n");
+
     // join threads
     for (thread = 0; thread < thread_count; thread++)
       pthread_join(thread_handles[thread], NULL);
+    printf("make it out alive?\n");
 
     // apply move if it shortens the tour
     if (minchange < 0) {
@@ -86,6 +92,7 @@ static int TwoOpt(int& climbs)   // #9
         j--;
       }
     }
+
   } while (minchange < 0);
   climbs = iter;
 
@@ -121,14 +128,19 @@ int main(int argc, char *argv[])
   fclose(f);
   printf("configuration: %d cities from %s on %ld threads\n", cities, argv[1], thread_count);  // #7 ?
 
+  px = posx;
+  py = posy;
+
   // start time
   struct timeval start, end;
   gettimeofday(&start, NULL);
 
+  printf("before calling?\n");
   // find good tour
-  //int climbs;
+  int climbs;
   int len = TwoOpt(climbs);
 
+  printf("after calling?\n");
   // end time
   gettimeofday(&end, NULL);
   double runtime = end.tv_sec + end.tv_usec / 1000000.0 - start.tv_sec - start.tv_usec / 1000000.0;
@@ -138,9 +150,6 @@ int main(int argc, char *argv[])
 
   // output result
   printf("tour length = %d\n", len);
-
-  px = posx;
-  py = posy;
 
   // scale and draw final tour
   const int width = 1024;
@@ -178,8 +187,9 @@ static void* workerThreads(void* rank) {
   long my_rank = (long) rank;
 
   // determine best 2-opt move
-  my_minchange = 0;
+  long my_minchange = 0;
 
+  printf("here in worker?\n");
   // #15 cyclic
   for (int i = my_rank; i < cities - 2; i+=thread_count) {
     for (int j = i + 2; j < cities; j++) {
@@ -192,8 +202,11 @@ static void* workerThreads(void* rank) {
   }
 
   pthread_mutex_lock(&mutex_p);
-  if (minchange > my_minchange)
+  if (minchange > my_minchange) {
+    printf("in the lock as %ld?\n", rank);
     minchange = my_minchange;
+  }
   pthread_mutex_unlock(&mutex_p);
+
   return NULL;
 }
